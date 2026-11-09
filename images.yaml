@@ -16,8 +16,9 @@ target:
   namespace: tpaas-test
   platforms:
     - linux/amd64
+    - linux/arm64/v8
 
 images:
-  - source: lmsysorg/sglang:v0.5.23-cu130
-    target: lmsysorg/sglang:v0.5.23-cu130
+  - source: quay.io/ascend/vllm-ascend:v0.30.0
+    target: ascend/vllm-ascend:v0.30.0
     multiarch: true
