@@ -13,12 +13,11 @@
 
 target:
   registry: hub-pub.jdcloud.com
-  namespace: jdaip-system
+  namespace: tpaas-test
   platforms:
     - linux/amd64
-    - linux/arm64/v8
 
 images:
-  - source: quay.io/ascend/vllm-ascend:v0.30.0
-    target: vllm-ascend:v0.30.0
+  - source: lmsysorg/sglang:v0.5.23-cu130
+    target: lmsysorg/sglang:v0.5.23-cu130
     multiarch: true
