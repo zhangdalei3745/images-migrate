@@ -4,6 +4,9 @@
 # 根据 images[].multiarch 字段分流：
 #   - multiarch: true  → docker buildx imagetools inspect + create，按 target.platforms 过滤
 #   - multiarch: false → skopeo 在 registry 间流式复制，不把镜像层解压到本地
+# 多架构镜像若再设置 images[].split_by_arch: true，则每个平台推到独立仓库：
+#   <target 的 repo 段>-<arch>:<tag>，例如 ascend/vllm-ascend-openeuler24:v1
+#   → ascend/vllm-ascend-openeuler24-amd64:v1 / ascend/vllm-ascend-openeuler24-arm64:v1
 # 单条失败不中断整体，结束时汇总；任一失败则脚本以 1 退出。
 
 set -uo pipefail
@@ -112,10 +115,23 @@ find_digest_for_platform() {
   ' | head -1
 }
 
+# 按平台拆分目标路径：repo:tag -> repo-<arch>:tag（无 tag 时只改 repo 段）。
+split_target_path() {
+  local path="$1"
+  local arch="$2"
+
+  if [[ "$path" == *:* ]]; then
+    printf '%s-%s:%s' "${path%%:*}" "$arch" "${path##*:}"
+  else
+    printf '%s-%s' "$path" "$arch"
+  fi
+}
+
 for ((i=0; i<COUNT; i++)); do
   SOURCE=$(yq -r ".images[$i].source" "$CONFIG_FILE")
   TARGET_OVERRIDE=$(yq -r ".images[$i].target // \"\"" "$CONFIG_FILE")
   MULTIARCH=$(yq -r ".images[$i].multiarch // false" "$CONFIG_FILE")
+  SPLIT_BY_ARCH=$(yq -r ".images[$i].split_by_arch // false" "$CONFIG_FILE")
 
   if [[ -z "$SOURCE" || "$SOURCE" == "null" ]]; then
     echo "images[$i].source missing, skipped" >&2
@@ -169,6 +185,50 @@ for ((i=0; i<COUNT; i++)); do
 
   declare -a SOURCES_FOR_CREATE=()
   IS_MANIFEST_LIST=$(printf '%s' "$RAW" | jq -r 'if has("manifests") then "yes" else "no" end')
+
+  # 按平台拆分：每个平台推到独立的 <repo>-<arch>:<tag> 仓库。
+  if [[ "$SPLIT_BY_ARCH" == "true" && "$IS_MANIFEST_LIST" == "yes" ]]; then
+    if [[ ${#DESIRED_PLATFORMS[@]} -eq 0 ]]; then
+      echo "  FAIL: split_by_arch 需要配置 target.platforms（决定拆分平台与后缀）"
+      FAILED+=("$SOURCE -> $FULL_TARGET (split_by_arch requires target.platforms)")
+      continue
+    fi
+
+    echo "  多架构源，按平台拆分推送（split_by_arch）:"
+    SPLIT_ATTEMPTED=0
+    for plat in "${DESIRED_PLATFORMS[@]}"; do
+      digest=$(find_digest_for_platform "$RAW" "$plat")
+      arch=$(echo "$plat" | cut -d/ -f2)
+      split_full="${REGISTRY}/${NAMESPACE}/$(split_target_path "$TARGET_PATH" "$arch")"
+
+      if [[ -z "$digest" || "$digest" == "null" ]]; then
+        echo "    [SKIP] $plat  (源镜像无此平台)"
+        continue
+      fi
+
+      SPLIT_ATTEMPTED=$((SPLIT_ATTEMPTED + 1))
+      echo "    [OK]   $plat  -> ${digest:0:19}...  =>  $split_full"
+
+      if [[ "$DRY_RUN" -eq 1 ]]; then
+        SUCCESS+=("$SOURCE ($plat) -> $split_full (dry-run)")
+        continue
+      fi
+
+      if docker buildx imagetools create --tag "$split_full" "${SOURCE}@${digest}"; then
+        SUCCESS+=("$SOURCE ($plat) -> $split_full")
+      else
+        FAILED+=("$SOURCE ($plat) -> $split_full")
+      fi
+    done
+
+    if [[ "$SPLIT_ATTEMPTED" -eq 0 ]]; then
+      echo "  FAIL: 源镜像不含任何配置的目标平台"
+      FAILED+=("$SOURCE -> $FULL_TARGET (no matching platforms)")
+    fi
+
+    report_disk_usage
+    continue
+  fi
 
   if [[ "$IS_MANIFEST_LIST" == "no" ]]; then
     echo "  单架构源，原样复制（平台过滤不适用）"

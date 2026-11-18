@@ -8,8 +8,14 @@
 # images[].target    : 可选，覆盖目标路径段；缺省取 source 最后一段
 # images[].multiarch : 可选，true 表示多架构镜像（走 imagetools inspect + create），
 #                      false/省略 表示单架构（走 pull → tag → push）
+# images[].split_by_arch : 可选，仅 multiarch: true 时生效。true 表示按平台拆成独立仓库：
+#                      <target 的 repo 段>-<arch>:<tag>
+#                      例：ascend/vllm-ascend-openeuler24:v1
+#                          → ascend/vllm-ascend-openeuler24-amd64:v1
+#                          → ascend/vllm-ascend-openeuler24-arm64:v1
 #
 # 最终目标地址 = <registry>/<namespace>/<target 或 source 末段>
+# split_by_arch: true 时，每个平台各自一个目标地址（见上）
 
 target:
   registry: hub-pub.jdcloud.com
@@ -19,6 +25,7 @@ target:
     - linux/arm64/v8
 
 images:
-  - source: quay.io/ascend/vllm-ascend:v0.30.0-openeuler
-    target: ascend/vllm-ascend:v0.30.0-openeuler
+  - source: quay.io/ascend/vllm-ascend:v0.30.0-a3-openeuler
+    target: ascend/vllm-ascend-openeuler24:v0.30.0-a3-openeuler
     multiarch: true
+    split_by_arch: true
