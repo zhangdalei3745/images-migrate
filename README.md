@@ -18,6 +18,7 @@ GitHub Actions  -->  docker login harbor  -->  for each image in images.yaml:
 
 - **单架构源（默认）**：用 `skopeo copy` 在两个 registry 之间流式复制压缩层，不保留本地镜像；平台白名单不适用。
 - **多架构源**：用 `docker buildx imagetools` 跨 registry 复制，并按 `target.platforms` 白名单筛选 digest、重组 manifest list。当前默认只保留 `linux/amd64` 和 `linux/arm64/v8`。
+- **多架构源 + `split_by_arch: true`**：不重组 manifest list，而是把每个平台推到**独立的仓库**，仓库名追加 `-<arch>` 后缀（`repo-amd64:tag` / `repo-arm64:tag`）。适合目标端要按架构分开拉取的场景。
 - **未配置 `target.platforms`**：源的所有平台全部保留。
 
 ## 一次性准备
@@ -48,6 +49,12 @@ GitHub Actions  -->  docker login harbor  -->  for each image in images.yaml:
      - source: redis:7-alpine              # 自动 -> harbor.example.com/library/redis:7-alpine
      - source: alpine:3.19
        target: base/alpine:3.19            # 显式 -> harbor.example.com/library/base/alpine:3.19
+     - source: quay.io/ascend/vllm-ascend:v0.30.0-openeuler
+       target: ascend/vllm-ascend-openeuler24:v0.30.0-openeuler
+       multiarch: true
+       split_by_arch: true                 # 按架构拆仓库：
+                                           #   .../ascend/vllm-ascend-openeuler24-amd64:v0.30.0-openeuler
+                                           #   .../ascend/vllm-ascend-openeuler24-arm64:v0.30.0-openeuler
    ```
 
 2. 提交到 master：
@@ -70,6 +77,7 @@ GitHub Actions  -->  docker login harbor  -->  for each image in images.yaml:
 
 - 不写 `target`：取 `source` 最后一段（`docker.io/library/alpine:3.19` -> `alpine:3.19`）
 - 写 `target`：完全覆盖路径段
+- 写 `split_by_arch: true`：每个平台各自一个地址，仓库名追加 `-amd64` / `-arm64`（`ascend/vllm-ascend-openeuler24:v1` -> `ascend/vllm-ascend-openeuler24-amd64:v1` 和 `ascend/vllm-ascend-openeuler24-arm64:v1`）
 
 ## 本地测试
 
