@@ -19,6 +19,6 @@ target:
     - linux/arm64/v8
 
 images:
-  - source: ghcr.io/aisbench/aisbench_benchmark:v3.1-20261013-master-ubuntu22.04-py310
-    target: aisbench/aisbench_benchmark:v3.1-20261013-master-ubuntu22.04-py310
+  - source: quay.io/ascend/vllm-ascend:v0.30.0-openeuler
+    target: ascend/vllm-ascend:v0.30.0-openeuler
     multiarch: true
