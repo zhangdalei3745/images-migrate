@@ -25,7 +25,7 @@ target:
     - linux/arm64/v8
 
 images:
-  - source: quay.io/ascend/vllm-ascend:v0.30.0-a3-openeuler
-    target: ascend/vllm-ascend-openeuler24:v0.30.0-a3-openeuler
+  - source: vllm/vllm-openai:v0.33.0
+    target: vllm/vllm-openai:v0.33.0
     multiarch: true
     split_by_arch: true
